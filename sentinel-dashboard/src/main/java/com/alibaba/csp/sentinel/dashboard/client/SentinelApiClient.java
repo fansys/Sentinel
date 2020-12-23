@@ -32,10 +32,13 @@ import java.util.stream.Collectors;
 
 import com.alibaba.csp.sentinel.adapter.gateway.common.rule.GatewayFlowRule;
 import com.alibaba.csp.sentinel.command.CommandConstants;
+import com.alibaba.csp.sentinel.command.CommandRequest;
+import com.alibaba.csp.sentinel.command.CommandResponse;
 import com.alibaba.csp.sentinel.config.SentinelConfig;
 import com.alibaba.csp.sentinel.command.vo.NodeVo;
 import com.alibaba.csp.sentinel.dashboard.datasource.entity.gateway.ApiDefinitionEntity;
 import com.alibaba.csp.sentinel.dashboard.datasource.entity.gateway.GatewayFlowRuleEntity;
+import com.alibaba.csp.sentinel.dashboard.netty.NettyServerCommandCenter;
 import com.alibaba.csp.sentinel.dashboard.util.AsyncUtils;
 import com.alibaba.csp.sentinel.slots.block.Rule;
 import com.alibaba.csp.sentinel.slots.block.authority.AuthorityRule;
@@ -43,6 +46,8 @@ import com.alibaba.csp.sentinel.slots.block.degrade.DegradeRule;
 import com.alibaba.csp.sentinel.slots.block.flow.FlowRule;
 import com.alibaba.csp.sentinel.slots.block.flow.param.ParamFlowRule;
 import com.alibaba.csp.sentinel.slots.system.SystemRule;
+import com.alibaba.csp.sentinel.transport.model.Node;
+import com.alibaba.csp.sentinel.transport.util.HttpCommandUtils;
 import com.alibaba.csp.sentinel.util.AssertUtil;
 import com.alibaba.csp.sentinel.util.StringUtil;
 import com.alibaba.fastjson.JSON;
@@ -267,6 +272,38 @@ public class SentinelApiClient {
     }
 
     /**
+     * Netty 重写的 CommandHandler
+     * @param app
+     * @param ip
+     * @param port
+     * @param api
+     * @param params
+     * @param useHttpPost
+     * @return
+     */
+    private CompletableFuture<String> executeCommand(String app, String ip, int port, String api, Map<String, String> params, boolean useHttpPost) {
+        if (StringUtil.isBlank(ip) || StringUtil.isBlank(api)) {
+            return AsyncUtils.newFailedFuture(new IllegalArgumentException("Bad URL or command name"));
+        }
+        if (params == null) {
+            params = Collections.emptyMap();
+        }
+        CommandRequest request = new CommandRequest();
+        request.addMetadata(HttpCommandUtils.REQUEST_TARGET, api);
+        for (String key : params.keySet()) {
+            request.addParam(key, params.get(key));
+        }
+        Node node = new Node(ip, port);
+        CompletableFuture<CommandResponse<String>> commandResponse = NettyServerCommandCenter.sendRequest(node, request);
+        return commandResponse.thenApply(response -> {
+            if (response.isSuccess()) {
+                return response.getResult();
+            }
+            throw new CommandFailedException(response.getResult());
+        });
+    }
+
+    /**
      * Prefer to execute request using POST
      * 
      * @param app
@@ -276,7 +313,7 @@ public class SentinelApiClient {
      * @param params
      * @return
      */
-    private CompletableFuture<String> executeCommand(String app, String ip, int port, String api, Map<String, String> params, boolean useHttpPost) {
+    private CompletableFuture<String> executeCommandOld(String app, String ip, int port, String api, Map<String, String> params, boolean useHttpPost) {
         CompletableFuture<String> future = new CompletableFuture<>();
         if (StringUtil.isBlank(ip) || StringUtil.isBlank(api)) {
             future.completeExceptionally(new IllegalArgumentException("Bad URL or command name"));

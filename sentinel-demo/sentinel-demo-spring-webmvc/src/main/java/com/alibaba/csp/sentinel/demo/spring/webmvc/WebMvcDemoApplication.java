@@ -15,6 +15,8 @@
  */
 package com.alibaba.csp.sentinel.demo.spring.webmvc;
 
+import com.alibaba.csp.sentinel.config.SentinelConfig;
+import com.alibaba.csp.sentinel.transport.config.TransportConfig;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
@@ -28,6 +30,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class WebMvcDemoApplication {
 
     public static void main(String[] args) {
+        SentinelConfig.setConfig(TransportConfig.CONSOLE_SERVER, "127.0.0.1:8619");
         SpringApplication.run(WebMvcDemoApplication.class);
     }
 }
